@@ -1,0 +1,32 @@
+FROM ubuntu:14.04
+
+ARG MAJOR_VERSION=1.5
+ARG VERSION=1.5.19
+
+# Install necessary packages
+RUN apt-get update \
+	&& apt-get -y install wget haproxy build-essential libssl-dev libpopt-dev libpcre3-dev 
+
+# Install haproxy
+RUN mkdir /var/tmp/haproxy \
+	&& cd /var/tmp/haproxy \
+	&& wget -q -o - http://www.haproxy.org/download/$MAJOR_VERSION/src/haproxy-$VERSION.tar.gz \
+	&& tar -xzf /var/tmp/haproxy/haproxy-$VERSION.tar.gz \
+	&& cd haproxy-$VERSION \
+	&& make clean \
+   	&& make TARGET=linux2628 CPU=native USE_OPENSSL=1 USE_ZLIB=1 install \
+   	&& sed -i.bak s/ENABLED=0/ENABLED=1/g /etc/default/haproxy \
+   	&& sed -i.bak s#HAPROXY=/usr/sbin/haproxy#HAPROXY=/usr/local/sbin/haproxy#g /etc/init.d/haproxy 
+
+# COPY haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg
+
+# Create server certificate
+	# && cp $dataDir/server.pem $homeDir/server.pem
+
+# ENTRYPOINT ["/etc/init.d/haproxy start"]
+# CMD ["start-foreground"]
+
+EXPOSE 1936
+
+CMD /bin/bash
+

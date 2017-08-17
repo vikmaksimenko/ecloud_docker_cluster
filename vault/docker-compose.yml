@@ -1,0 +1,38 @@
+version: "3"
+services:
+  master:
+    # replace username/repo:tag with your name and image details
+    image: ubuntu
+    # deploy:
+      # replicas: 1
+      # resources:
+        # limits:
+          # cpus: "0.1"
+          # memory: 6000M
+      # restart_policy:
+        # condition: on-failure
+    ports:
+      - "80:80"
+    networks:
+      - webnet
+
+  db:
+    image: mysql:latest
+    environment:
+        MYSQL_RANDOM_ROOT_PASSWORD: 1
+        MYSQL_DATABASE: commander
+        MYSQL_USER: commander
+        MYSQL_PASSWORD: commander
+
+    # ports:
+      # - "3306:8080"
+    # volumes:
+      # - "/var/run/docker.sock:/var/run/docker.sock"
+    # deploy:
+    #   placement:
+    #     constraints: [node.role == manager]
+    networks:
+      - webnet    
+networks:
+  webnet:
+

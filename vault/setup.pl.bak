@@ -1,0 +1,258 @@
+#!/usr/bin/perl
+
+# TODO: Add description
+
+sub getLoggingTime {
+    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst)=localtime(time);
+    my $nice_timestamp = sprintf ( "%04d/%02d/%02d %02d:%02d:%02d",
+                                   $year+1900,$mon+1,$mday,$hour,$min,$sec);
+    return $nice_timestamp;
+}
+
+sub echo {
+	my $message = shift;
+	my $timestamp = getLoggingTime();
+	print("[$timestamp] $message\n");
+}
+
+sub get_container_ip {
+	my $cid = shift;
+	my $out = `docker inspect $cid`;
+
+	$out =~ /"IPAddress": "(\d+\.\d+\.\d+\.\d+)"/;
+	$ip = $1;
+	return $ip;
+}
+
+sub is_container_running {
+	my $cid = shift;
+	my $out = `docker inspect $cid`;
+	return $out =~ /"Running": true/;
+}
+
+sub update_database_properties {
+	my $db_cid = shift;
+	my $db_ip = get_container_ip($db_cid);
+
+	my $dest = "slave/database.properties";
+	my $src = "slave/database.properties-mysql";
+
+	system("cp $src $dest");
+	system("sed -i.bak 's/IP/$db_ip/' $dest");
+
+	# system("cat slave/database.properties");
+}
+
+sub create_haproxy_cfg {
+	my ($slaves_ref) = @_;
+	my @slaves = @{$slaves_ref};
+	my $slave_number = scalar @slaves;
+
+	my $buffer;
+	my $config = <<'END_CONFIG';
+# This config needs haproxy-1.1.28 or haproxy-1.2.1
+
+global 
+        log 127.0.0.1   local0
+        log 127.0.0.1   local1 notice
+        #log loghost    local0 info
+        maxconn 20000
+        #chroot /usr/share/haproxy
+        user haproxy
+        group haproxy
+        daemon
+        #debug
+        #quiet
+
+defaults
+        log     global
+        option  dontlognull
+        retries 3
+        option redispatch
+        maxconn 20000
+        contimeout      5000
+        clitimeout      50000
+        srvtimeout      50000
+
+listen stats *:1936
+       mode http
+       stats enable
+       stats realm Haproxy\\ Statistics
+       stats uri /
+       stats refresh 30
+       stats show-legends
+
+
+# load balance ports 8000 and 8443 across Commander servers, with HAProxy acting as the SSL endpoint for port 8443, and health check HTTP GET /commanderRequest/health
+
+frontend commander-server-frontend-insecure
+        mode http
+        bind 0.0.0.0:8000
+        default_backend commander-server-backend
+
+frontend commander-server-frontend-secure
+        mode tcp
+        bind 0.0.0.0:8443 ssl crt /var/tmp/server.pem
+        default_backend commander-server-backend
+
+backend commander-server-backend
+        mode http
+END_CONFIG
+
+	for (my $i = 0; $i < $slave_number; $i++ ) {
+		$config = $config . "        server node" . ($i + 1) . " $slaves[$i]{ip}:8000 check\n";
+	}
+
+	$buffer = <<'END_CONFIG';
+        stats enable
+        option httpchk GET /commanderRequest/health
+
+# load balance port 61613 across Commander servers, with HAProxy acting as the SSL endpoint
+
+frontend commander-stomp-frontend
+        mode tcp
+        bind 0.0.0.0:61613 ssl crt /var/tmp/server.pem
+        default_backend commander-stomp-backend
+        option tcplog
+        log global
+
+backend commander-stomp-backend
+        mode tcp
+END_CONFIG
+
+	$config = $config . "\n" . $buffer;
+
+	for (my $i = 0; $i < $slave_number; $i++ ) {
+		$config = $config . "        server node" . ($i + 1) . " $slaves[$i]{ip}:61613 check\n";
+	}
+
+	$buffer = <<'END_CONFIG';
+        option tcplog
+        log global
+END_CONFIG
+
+	$config = $config . "\n" . $buffer;
+}
+
+# Parse arguments
+
+my $slave_number	= 1;
+my $db_type			= "MYSQL";
+my $commander_dir 	= "/opt/electriccloud/electriccommander";
+
+my $current_dir = `pwd`;
+chomp($current_dir);
+
+my $cmd;
+my $out;
+
+my $cid;
+my $ip;
+my %slave;
+
+my @slaves = ();
+my $db_cid;
+my $haproxy_cid;
+my $zk_cid;
+my $web_cid;
+my $agent_cid;
+
+my %machines;
+
+echo("Creating network");
+system("docker network create -d bridge --gateway 172.29.199.200 --subnet 172.29.199.0/24 --aux-address \"DefaultGatewayIPv4=172.29.199.1\" network1");
+
+echo("Starting $db_type database server");
+$db_cid = `docker run -d --name db --net network1 --hostname db --env MYSQL_ROOT_PASSWORD=root --env MYSQL_DATABASE=commander --publish 3306:3306 mysql:latest`;
+
+echo("Updating database.properties");
+# TODO: add support of all the required db types
+update_database_properties($db_cid);
+
+echo("Creating $slave_number slaves");
+for (my $i = 1; $i <= $slave_number; $i++ ) {
+	echo("Starting slave$i");
+	$cmd = "docker run --name slave$i --net network1 --hostname slave$i --volume $current_dir/slave:/data -dit vmaksimenko/ecloud:slave"; # --link db:mysql
+	
+	$cid = `$cmd`;
+	$out = `docker inspect $cid`;
+
+	die "ERROR: slave$i is not running. CID: $cid"
+		if(!is_container_running($cid));
+
+	push @slaves, {
+		name 	=> "slave$i",
+		ip 		=> get_container_ip($cid),
+		cid 	=> $cid
+	};
+}
+
+echo("Run Zookeeper Server");
+$zk_cid = `docker run -d --name zookeeper --net network1 --hostname zookeeper $1 --restart always jplock/zookeeper`;
+
+echo("Create haproxy.cfg file");
+my $cert = create_haproxy_cfg(\@slaves);
+my $filename = 'haproxy/haproxy.cfg';
+open(my $fh, '>', $filename) or die "ERROR: Failed to open '$filename' $!";
+print $fh $cert;
+close $fh;
+
+echo("Run Haproxy server container");
+$haproxy_cid = `docker run -dit --name haproxy --net network1 --hostname haproxy --publish 1936:1936 --volume $current_dir/haproxy:/data haproxy`;
+
+echo("Create server certificate");
+system("docker exec -it haproxy perl /data/generate_certificate.pl > /dev/null");
+
+echo("Starting haproxy service");
+system("docker exec -it haproxy cp /data/haproxy.cfg /etc/haproxy/haproxy.cfg");
+system("docker exec -it haproxy /etc/init.d/haproxy start > /dev/null");
+
+echo("Install commander on slaves");
+for (my $i = 1; $i <= $slave_number; $i++ ) {
+	echo("Installing commander to slave$i");
+	system("docker exec -it slave$i sudo /data/install_commander.sh");
+}
+
+echo("Move first node to cluster");
+my $haproxy_ip = get_container_ip($haproxy_cid);
+my $zk_ip = get_container_ip($zk_cid);
+
+system("docker exec -it slave1 sudo /data/setup_master.sh $haproxy_ip $zk_ip");
+
+echo("Move other nodes to cluster");
+for (my $i = 2; $i <= $slave_number; $i++ ) {
+	system("docker exec -it slave$i $commander_dir/bin/ecconfigure --serverName $zk_ip --serverZooKeeperConnection $zk_ip:2181");
+}
+for (my $i = 2; $i <= $slave_number; $i++ ) {
+	system("docker exec -it slave$i sudo /data/wait_for_server.sh");
+}
+
+echo("Creating Web Server");
+$web_cid = `docker run -dit --name web --net network1 --hostname web --volume $current_dir/slave:/data --publish 443:443 vmaksimenko/ecloud:slave`;
+system("docker exec -it web /data/install_web.sh $haproxy_ip");
+
+echo("Creating agent");
+$agent_cid = `docker run -dit --name agent --net network1 --hostname agent --volume $current_dir/slave:/data vmaksimenko/ecloud:slave`;
+system("docker exec -it web /data/install_agent.sh $haproxy_ip");
+
+# ...
+# $COMMANDER_DIR/bin/ecconfigure --serverName $ZOOKEEPER_IP --serverZooKeeperConnection ${ZOOKEEPER_IP}:2181
+# 
+
+
+# `docker kill slave1`;
+# `docker rm slave1`;
+
+# docker kill db
+
+# `docker kill slave2`;
+# `docker rm slave2`;
+
+# `docker kill zookeeper`;
+# `docker rm zookeeper`;
+
+# `docker kill haproxy`;
+# `docker rm haproxy`;
+
+# `docker network rm network1`;
+

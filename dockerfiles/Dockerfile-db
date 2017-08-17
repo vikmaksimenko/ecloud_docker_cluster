@@ -1,0 +1,11 @@
+FROM mysql:latest
+
+# Grant ALL permissions to commander user
+CMD mysql --user="root" --password="root" --execute="GRANT ALL PRIVILEGES ON * . * TO 'commander'@'%';"
+
+# Make port 3306 available to the world outside this container
+EXPOSE 3306
+
+ENV MYSQL_ROOT_PASSWORD=root MYSQL_DATABASE=commander MYSQL_USER=commander MYSQL_PASSWORD=commander
+
+
