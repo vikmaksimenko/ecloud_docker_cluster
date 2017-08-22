@@ -77,16 +77,9 @@ my $out;
 
 my $cid;
 my $ip;
-my %slave;
-
-my @slaves;
-my $db_cid;
-my $haproxy_cid;
-my $zk_cid;
-my $web_cid;
-my $agent_cid;
 
 my %containers;
+
 
 #-----------------------------------------------------------------
 # OPTIONS
@@ -157,10 +150,15 @@ sub validate_container {
 	    "cid"	=> $cid,
 	    "ip"	=> $ip
 	};
+	serialise_docker_instance($container, "container", $cid);
+}
 
-	my $filename = 'cids.txt';
+sub serialise_docker_instance {
+	my ($name, $type, $cid) = @_;
+	my $filename = 'instances.csv';
+
 	open(my $fh, '>>', $filename) or die "ERROR: Failed to open '$filename' $!";
-	print $fh $cid;
+	print $fh "$name,$type,$cid\n";
 	close $fh;
 }
 
@@ -271,15 +269,23 @@ END_CONFIG
 }
 
 # Cleanup cid file
-run("> cids.txt");
+run("> instances.csv");
 
 check_files();
 
 echo("Creating network");
 $cid = `docker network create -d bridge network1`;
+chomp($cid);
+serialise_docker_instance("network1", "network", $cid);
+
+echo("Creating volume for workspace");
+$out = `docker volume create --name workspace`;
+chomp($out);
+serialise_docker_instance($out, "volume", $out);
 
 echo("Starting $db_type database server");
 $cid = `docker run -d --name db --net network1 --hostname db --env MYSQL_ROOT_PASSWORD=root --env MYSQL_DATABASE=commander --publish 3306:3306 -v $current_dir/db:/etc/mysql/conf.d mysql:latest`;
+chomp($cid);
 validate_container("db", $cid);
 
 echo("Updating database.properties");
@@ -290,11 +296,13 @@ echo("Creating $slave_number slaves");
 for (my $i = 1; $i <= $slave_number; $i++ ) {
 	echo("Starting slave$i");
 	$cid = `docker run --name slave$i --net network1 --hostname slave$i --volume $current_dir/slave:/data -dit vmaksimenko/ecloud:slave`;
+	chomp($cid);
 	validate_container("slave$i", $cid);
 }
 
 echo("Run Zookeeper Server");
 $cid = `docker run -d --name zookeeper --net network1 --hostname zookeeper jplock/zookeeper`;
+chomp($cid);
 validate_container("zookeeper", $cid);
 
 echo("Create haproxy.cfg file");
@@ -333,10 +341,12 @@ for (my $i = 2; $i <= $slave_number; $i++ ) {
 }
 
 echo("Creating Web Server");
-$web_cid = `docker run -dit --name web --net network1 --hostname web --volume $current_dir/slave:/data --publish 443:443 vmaksimenko/ecloud:slave`;
+$cid = `docker run -dit --name web --net network1 --hostname web --volume $current_dir/slave:/data --publish 443:443 vmaksimenko/ecloud:slave`;
+validate_container("web", $cid);
 run(qq{docker exec -it web sudo /data/install_web.sh $containers{"haproxy"}{"ip"}});
 
 echo("Creating agent");
-$agent_cid = `docker run -dit --name agent --net network1 --hostname agent --volume $current_dir/slave:/data vmaksimenko/ecloud:slave`;
+$cid = `docker run -dit --name agent --net network1 --hostname agent --volume $current_dir/slave:/data vmaksimenko/ecloud:slave`;
+validate_container("agent", $cid);
 run(qq{docker exec -it agent sudo /data/install_agent.sh $containers{"haproxy"}{"ip"}});
 
