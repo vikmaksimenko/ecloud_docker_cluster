@@ -22,9 +22,9 @@ $COMMANDER_DIR/bin/ecconfigure --serverName $ZOOKEEPER_IP --serverZooKeeperConne
 /etc/init.d/commanderServer restart
 
 # wait_for_server
-echo "waiting for server up"
+echo "Waiting for server up"
 chmod +x /data/wait_for_server.sh && /data/wait_for_server.sh
-echo "commander server is running"
+echo "Commander server is running"
 
 export PATH=$PATH:$COMMANDER_DIR/bin;
 
@@ -53,9 +53,8 @@ ectool createResourcePool local
 ectool importLicenseData $DATA_DIR/license.xml
 
 # Workspace
-# rm -rf $DATA_DIR/workspace_${ipPrefix}
-# mkdir $DATA_DIR/workspace_${ipPrefix}
-# ectool modifyWorkspace default --agentUnixPath $DATA_DIR/workspace_${ipPrefix} --local false
+chmod 777 /workspace
+ectool modifyWorkspace default --agentUnixPath /workspace --local false
 
 # Plugins
 # rm -rf $DATA_DIR/plugins_${ipPrefix}

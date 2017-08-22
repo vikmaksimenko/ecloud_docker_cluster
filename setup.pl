@@ -142,6 +142,8 @@ sub validate_container {
 	my ($container, $cid) = @_;
 	my $out = `docker inspect $cid`;
 
+	serialise_docker_instance($container, "container", $cid);
+
 	die "ERROR: $container is not running. CID: $cid" if( $out !~ /"Running": true/ );
 
 	my $ip = get_container_ip($cid);
@@ -150,7 +152,6 @@ sub validate_container {
 	    "cid"	=> $cid,
 	    "ip"	=> $ip
 	};
-	serialise_docker_instance($container, "container", $cid);
 }
 
 sub serialise_docker_instance {
@@ -295,7 +296,7 @@ update_database_properties($containers{"db"}{"ip"});
 echo("Creating $slave_number slaves");
 for (my $i = 1; $i <= $slave_number; $i++ ) {
 	echo("Starting slave$i");
-	$cid = `docker run --name slave$i --net network1 --hostname slave$i --volume $current_dir/slave:/data -dit vmaksimenko/ecloud:slave`;
+	$cid = `docker run --name slave$i --net network1 --hostname slave$i --volume $current_dir/slave:/data --volume workspace:/workspace -dit vmaksimenko/ecloud:slave`;
 	chomp($cid);
 	validate_container("slave$i", $cid);
 }
@@ -341,12 +342,12 @@ for (my $i = 2; $i <= $slave_number; $i++ ) {
 }
 
 echo("Creating Web Server");
-$cid = `docker run -dit --name web --net network1 --hostname web --volume $current_dir/slave:/data --publish 443:443 vmaksimenko/ecloud:slave`;
+$cid = `docker run -dit --name web --net network1 --hostname web --volume $current_dir/slave:/data --volume workspace:/workspace --publish 443:443 vmaksimenko/ecloud:slave`;
 validate_container("web", $cid);
 run(qq{docker exec -it web sudo /data/install_web.sh $containers{"haproxy"}{"ip"}});
 
 echo("Creating agent");
-$cid = `docker run -dit --name agent --net network1 --hostname agent --volume $current_dir/slave:/data vmaksimenko/ecloud:slave`;
+$cid = `docker run -dit --name agent --net network1 --hostname agent --volume $current_dir/slave:/data --volume workspace:/workspace vmaksimenko/ecloud:slave`;
 validate_container("agent", $cid);
 run(qq{docker exec -it agent sudo /data/install_agent.sh $containers{"haproxy"}{"ip"}});
 
