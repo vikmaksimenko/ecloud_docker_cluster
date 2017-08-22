@@ -279,7 +279,7 @@ echo("Creating network");
 $cid = `docker network create -d bridge network1`;
 
 echo("Starting $db_type database server");
-$cid = `docker run -d --name db --net network1 --hostname db --env MYSQL_ROOT_PASSWORD=root --env MYSQL_DATABASE=commander --publish 3306:3306 mysql:latest`;
+$cid = `docker run -d --name db --net network1 --hostname db --env MYSQL_ROOT_PASSWORD=root --env MYSQL_DATABASE=commander --publish 3306:3306 -v $current_dir/db:/etc/mysql/conf.d mysql:latest`;
 validate_container("db", $cid);
 
 echo("Updating database.properties");
@@ -305,7 +305,7 @@ print $fh $haproxy_cfg;
 close $fh;
 
 echo("Run Haproxy server container");
-$cid = `docker run -dit --name haproxy --hostname haproxy --publish 1936:1936 --volume $current_dir/haproxy:/data vmaksimenko/ecloud:haproxy`;
+$cid = `docker run -dit --name haproxy --hostname haproxy --net network1 --publish 1936:1936 --volume $current_dir/haproxy:/data vmaksimenko/ecloud:haproxy`;
 validate_container("haproxy", $cid);
 
 echo("Create server certificate");
@@ -338,5 +338,5 @@ run(qq{docker exec -it web sudo /data/install_web.sh $containers{"haproxy"}{"ip"
 
 echo("Creating agent");
 $agent_cid = `docker run -dit --name agent --net network1 --hostname agent --volume $current_dir/slave:/data vmaksimenko/ecloud:slave`;
-run(qq{docker exec -it web sudo /data/install_agent.sh $containers{"haproxy"}{"ip"}});
+run(qq{docker exec -it agent sudo /data/install_agent.sh $containers{"haproxy"}{"ip"}});
 

@@ -32,10 +32,10 @@ ectool login admin changeme
 
 # Set the IP Address of the Commander server to HAproxy.  The
 # agents use this address for the finish-command.
-ectool setProperty /server/settings/ipAddress ${ZOOKEEPER_IP}
+ectool setProperty /server/settings/ipAddress ${HAPROXY_IP}
 
 # Stomp
-ectool setProperty /server/settings/stompClientUri stomp+ssl://${ZOOKEEPER_IP}:61613
+ectool setProperty /server/settings/stompClientUri stomp+ssl://${HAPROXY_IP}:61613
 ectool setProperty /server/settings/stompSecure false
 
 # Delete the "local" resource and create a "local" pool.
