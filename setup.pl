@@ -284,6 +284,11 @@ $out = `docker volume create --name workspace`;
 chomp($out);
 serialise_docker_instance($out, "volume", $out);
 
+echo("Creating volume for plugins");
+$out = `docker volume create --name plugins`;
+chomp($out);
+serialise_docker_instance($out, "volume", $out);
+
 echo("Starting $db_type database server");
 $cid = `docker run -d --name db --net network1 --hostname db --env MYSQL_ROOT_PASSWORD=root --env MYSQL_DATABASE=commander --publish 3306:3306 -v $current_dir/db:/etc/mysql/conf.d mysql:latest`;
 chomp($cid);
@@ -296,7 +301,7 @@ update_database_properties($containers{"db"}{"ip"});
 echo("Creating $slave_number slaves");
 for (my $i = 1; $i <= $slave_number; $i++ ) {
 	echo("Starting slave$i");
-	$cid = `docker run --name slave$i --net network1 --hostname slave$i --volume $current_dir/slave:/data --volume workspace:/workspace -dit vmaksimenko/ecloud:slave`;
+	$cid = `docker run --name slave$i --net network1 --hostname slave$i --volume $current_dir/slave:/data --volume workspace:/workspace --volume plugins:/plugins -dit vmaksimenko/ecloud:slave`;
 	chomp($cid);
 	validate_container("slave$i", $cid);
 }
@@ -342,12 +347,12 @@ for (my $i = 2; $i <= $slave_number; $i++ ) {
 }
 
 echo("Creating Web Server");
-$cid = `docker run -dit --name web --net network1 --hostname web --volume $current_dir/slave:/data --volume workspace:/workspace --publish 443:443 vmaksimenko/ecloud:slave`;
+$cid = `docker run -dit --name web --net network1 --hostname web --volume $current_dir/slave:/data --volume workspace:/workspace --volume plugins:/plugins --publish 443:443 vmaksimenko/ecloud:slave`;
 validate_container("web", $cid);
 run(qq{docker exec -it web sudo /data/install_web.sh $containers{"haproxy"}{"ip"}});
 
 echo("Creating agent");
-$cid = `docker run -dit --name agent --net network1 --hostname agent --volume $current_dir/slave:/data --volume workspace:/workspace vmaksimenko/ecloud:slave`;
+$cid = `docker run -dit --name agent --net network1 --hostname agent --volume $current_dir/slave:/data --volume workspace:/workspace --volume plugins:/plugins vmaksimenko/ecloud:slave`;
 validate_container("agent", $cid);
 run(qq{docker exec -it agent sudo /data/install_agent.sh $containers{"haproxy"}{"ip"}});
 

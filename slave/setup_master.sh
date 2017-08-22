@@ -57,20 +57,13 @@ chmod 777 /workspace
 ectool modifyWorkspace default --agentUnixPath /workspace --local false
 
 # Plugins
-# rm -rf $DATA_DIR/plugins_${ipPrefix}
-# mkdir $DATA_DIR/plugins_${ipPrefix}
-    # cp -r $COMMANDER_DIR/plugins/* $DATA_DIR/plugins_${ipPrefix}
-    # ectool setProperty /server/settings/pluginsDirectory "$DATA_DIR/plugins_${ipPrefix}"
-    # $COMMANDER_DIR/bin/ecconfigure --agentPluginsDirectory "$DATA_DIR/plugins_${ipPrefix}"
-    # set +x
-    # /etc/init.d/commanderServer restart
-    # wait_for_server
+cp -r $COMMANDER_DIR/plugins/* /plugins
+ectool setProperty "/server/settings/pluginsDirectory" "/plugins"
+ectool setProperty "/server/Electric Cloud/unixPluginsShare" "/plugins"
+ectool setProperty "/server/Electric Cloud/windowsPluginsShare" "/plugins"
+$COMMANDER_DIR/bin/ecconfigure --agentPluginsDirectory "/plugins"
 
-#     set -x
-#     ectool login admin changeme
-#     ectool setProperty "/server/Electric Cloud/unixPluginsShare" "$DATA_DIR/plugins_${ipPrefix}"
-# #   ectool setProperty "/server/Electric Cloud/windowsPluginsShare" "$DATA_DIR/plugins_${ipPrefix}"
-
-#     set +x
-
-# set +x
+/etc/init.d/commanderServer restart
+echo "Waiting for server up"
+chmod +x /data/wait_for_server.sh && /data/wait_for_server.sh
+echo "Commander server is running"
