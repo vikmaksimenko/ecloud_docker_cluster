@@ -91,19 +91,22 @@ sub read_csv {
 }
 
 sub remove_container {
-	my $cid = shift;
-	system("docker kill $cid");
-	system("docker rm $cid")
+	my $name = shift;
+	print( qq{==== Removing container: $name ==== \n} );
+	system("docker kill $name");
+	system("docker rm $name")
 }
 
 sub remove_network {
-	my $cid = shift;
-	system("docker network rm $cid");
+	my $name = shift;
+	print( qq{==== Removing network: $name ==== \n} );
+	system("docker network rm $name");
 }
 
 sub remove_volume {
-	my $cid = shift;
-	system("docker volume rm $cid");
+	my $name = shift;
+	print( qq{==== Removing volume: $name ==== \n} );
+	system("docker volume rm $name");
 }
 
 my %instances = read_csv($file);
@@ -112,8 +115,7 @@ if (@containers) {
 	@containers = split(/,/,join(',',@containers));
 	for my $container (@containers) {
 		if($instances{$container}) {
-			print( qq{==== Removing container: $container ==== \n} );
-			remove_container($instances{$container}{"cid"});
+			remove_container($instances{$container}{"name"});
 		}
 	}
 } 
@@ -122,8 +124,7 @@ if (@networks) {
 	@networks = split(/,/,join(',',@networks));
 	for my $network (@networks) {
 		if($instances{$network}) {
-			print( qq{==== Removing network: $network ==== \n} );
-			remove_network($instances{$network}{"cid"});
+			remove_network($instances{$network}{"name"});
 		}
 	}
 }
@@ -132,8 +133,7 @@ if (@volumes) {
 	@volumes = split(/,/,join(',',@volumes));
 	for my $volume (@volumes) {
 		if($instances{$volume}) {
-			print( qq{==== Removing volume: $volume ==== \n} );
-			remove_volume($instances{$volume}{"cid"});
+			remove_volume($instances{$volume}{"name"});
 		}
 	}
 }
@@ -156,17 +156,20 @@ if (!@containers && !@volumes && !@networks) {
 
 	# Network and Volume can be removed only if they are not in use by container 
 	for my $container (@containers) {
-		print( qq{==== Removing container: $container->{"name"} ==== \n} );
-		remove_container($container->{"cid"});
+		remove_container($container->{"name"});
 	}
 
 	for my $volume (@volumes) {
-		print( qq{==== Removing volume: $volume->{"name"} ==== \n} );
-		remove_volume($volume->{"cid"});
+		remove_volume($volume->{"name"});
 	}
 
 	for my $network (@networks) {
-		print( qq{==== Removing network: $network->{"name"} ==== \n} );
-		remove_network($network->{"cid"});
+		remove_network($network->{"name"});
 	}
 }
+
+# Cleanup cid file
+system("> instances.csv");
+
+# Cleanup haproxy.cfg
+system("cp haproxy/haproxy.cfg.sample haproxy/haproxy.cfg");

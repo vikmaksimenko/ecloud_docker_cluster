@@ -180,98 +180,6 @@ sub check_files {
 	run("find $current_dir/slave/license.xml > /dev/null");
 }
 
-sub create_haproxy_cfg {
-	my $buffer;
-	my $config = <<'END_CONFIG';
-# This config needs haproxy-1.1.28 or haproxy-1.2.1
-
-global 
-        log 127.0.0.1   local0
-        log 127.0.0.1   local1 notice
-        #log loghost    local0 info
-        maxconn 20000
-        #chroot /usr/share/haproxy
-        user haproxy
-        group haproxy
-        daemon
-        #debug
-        #quiet
-
-defaults
-        log     global
-        option  dontlognull
-        retries 3
-        option redispatch
-        maxconn 20000
-        contimeout      5000
-        clitimeout      50000
-        srvtimeout      50000
-
-listen stats *:1936
-       mode http
-       stats enable
-       stats realm Haproxy\\ Statistics
-       stats uri /
-       stats refresh 30
-       stats show-legends
-
-
-# load balance ports 8000 and 8443 across Commander servers, with HAProxy acting as the SSL endpoint for port 8443, and health check HTTP GET /commanderRequest/health
-
-frontend commander-server-frontend-insecure
-        mode http
-        bind 0.0.0.0:8000
-        default_backend commander-server-backend
-
-frontend commander-server-frontend-secure
-        mode tcp
-        bind 0.0.0.0:8443 ssl crt /var/tmp/server.pem
-        default_backend commander-server-backend
-
-backend commander-server-backend
-        mode http
-END_CONFIG
-
-	for (my $i = 1; $i <= $slave_number; $i++ ) {
-		my $key = "slave$i";
-		$config = qq{$config\tserver node$i $containers{$key}{"ip"}:8000 check\n};
-	}
-
-	$buffer = <<'END_CONFIG';
-        stats enable
-        option httpchk GET /commanderRequest/health
-
-# load balance port 61613 across Commander servers, with HAProxy acting as the SSL endpoint
-
-frontend commander-stomp-frontend
-        mode tcp
-        bind 0.0.0.0:61613 ssl crt /var/tmp/server.pem
-        default_backend commander-stomp-backend
-        option tcplog
-        log global
-
-backend commander-stomp-backend
-        mode tcp
-END_CONFIG
-
-	$config = $config . "\n" . $buffer;
-
-	for (my $i = 1; $i <= $slave_number; $i++ ) {
-		my $key = "slave$i";
-		$config = qq{$config\tserver node$i $containers{$key}{"ip"}:61613 check\n};
-	}
-
-	$buffer = <<'END_CONFIG';
-        option tcplog
-        log global
-END_CONFIG
-
-	$config = $config . "\n" . $buffer;
-}
-
-# Cleanup cid file
-run("> instances.csv");
-
 check_files();
 
 echo("Creating network");
@@ -304,19 +212,16 @@ for (my $i = 1; $i <= $slave_number; $i++ ) {
 	$cid = `docker run --name slave$i --net network1 --hostname slave$i --volume $current_dir/slave:/data --volume workspace:/workspace --volume plugins:/plugins -dit vmaksimenko/ecloud:slave`;
 	chomp($cid);
 	validate_container("slave$i", $cid);
+	system(qq{perl update_haproxy_cfg.pl slave$i $containers{"slave$i"}{"ip"}});
 }
 
 echo("Run Zookeeper Server");
-$cid = `docker run -d --name zookeeper --net network1 --hostname zookeeper jplock/zookeeper`;
+$cid = `docker run -d --name zookeeper --net network1 --hostname zookeeper --publish 8080:8080 --volume $current_dir/exhibitor:/exhibitor jplock/zookeeper`;
 chomp($cid);
 validate_container("zookeeper", $cid);
 
-echo("Create haproxy.cfg file");
-my $haproxy_cfg = create_haproxy_cfg();
-my $filename = 'haproxy/haproxy.cfg';
-open(my $fh, '>', $filename) or die "ERROR: Failed to open '$filename' $!";
-print $fh $haproxy_cfg;
-close $fh;
+echo("Starting Exhibitor");
+run("docker exec -d zookeeper java -jar /exhibitor/exhibitor-1.5.5.jar -c file");
 
 echo("Run Haproxy server container");
 $cid = `docker run -dit --name haproxy --hostname haproxy --net network1 --publish 1936:1936 --volume $current_dir/haproxy:/data vmaksimenko/ecloud:haproxy`;
@@ -340,9 +245,11 @@ run(qq{docker exec -it slave1 sudo /data/setup_master.sh $containers{"haproxy"}{
 
 echo("Move other nodes to cluster");
 for (my $i = 2; $i <= $slave_number; $i++ ) {
+	echo("Moving slave$i");
 	run(qq{docker exec -it slave$i $commander_dir/bin/ecconfigure --serverName $containers{"zookeeper"}{"ip"} --serverZooKeeperConnection $containers{"zookeeper"}{"ip"}:2181});
 }
 for (my $i = 2; $i <= $slave_number; $i++ ) {
+	echo("Waiting for slave$i");
 	run("docker exec -it slave$i sudo /data/wait_for_server.sh");
 }
 
