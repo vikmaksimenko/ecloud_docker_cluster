@@ -164,10 +164,11 @@ sub serialise_docker_instance {
 }
 
 sub update_database_properties {
-	my $db_ip = shift;
+	my ($db_ip, $db_type) = @_;
+	$db_type = lc($db_type);
 
 	my $dest = "slave/database.properties";
-	my $src = "slave/database.properties-mysql";
+	my $src = "slave/database.properties-$db_type";
 
 	run("cp $src $dest");
 	run("sed -i.bak 's/IP/$db_ip/' $dest");
@@ -198,13 +199,23 @@ chomp($out);
 serialise_docker_instance($out, "volume", $out);
 
 echo("Starting $db_type database server");
-$cid = `docker run -d --name db --net network1 --hostname db --env MYSQL_ROOT_PASSWORD=root --env MYSQL_DATABASE=commander --publish 3306:3306 -v $current_dir/db:/etc/mysql/conf.d mysql:latest`;
-chomp($cid);
-validate_container("db", $cid);
+if ($db_type eq "MYSQL") {
+	$cid = `docker run -d --name db --net network1 --hostname db --env MYSQL_ROOT_PASSWORD=root --env MYSQL_DATABASE=commander --publish 3306:3306 -v $current_dir/db/mysql:/etc/mysql/conf.d mysql:latest`;
+	chomp($cid);
+	validate_container("db", $cid);
+
+} elsif($db_type eq "ORACLE") {
+	$cid = `docker run -d --name db --net network1 --hostname db --env ORACLE_ALLOW_REMOTE=true --publish 49160:22 --publish 49161:1521 -v $current_dir/db/oracle:/data wnameless/oracle-xe-11g`;
+	chomp($cid);
+
+
+	validate_container("db", $cid);
+	run("docker exec -it db sh /data/update_db_server.sh");
+}
 
 echo("Updating database.properties");
-# TODO: add support of all the required db types
-update_database_properties($containers{"db"}{"ip"});
+update_database_properties($containers{"db"}{"ip"}, $db_type);
+
 
 echo("Creating $slave_number slaves");
 for (my $i = 1; $i <= $slave_number; $i++ ) {
@@ -241,7 +252,7 @@ for (my $i = 1; $i <= $slave_number; $i++ ) {
 }
 
 echo("Move first node to cluster");
-run(qq{docker exec -it slave1 sudo /data/setup_master.sh $containers{"haproxy"}{"ip"} $containers{"zookeeper"}{"ip"}});
+run(qq{docker exec -it slave1 sudo /data/setup_master.sh $containers{"haproxy"}{"ip"} $containers{"zookeeper"}{"ip"} $db_type});
 
 echo("Move other nodes to cluster");
 for (my $i = 2; $i <= $slave_number; $i++ ) {

@@ -17,8 +17,8 @@ RUN apt-get update && \
     apt-get update && \
     apt-get install -y lib32bz2-1.0 libuuid1:i386
 
-# Copy the current directory contents into the container at /data
-ADD slave /data
+# Additional packages to install
+RUN apt-get install -u unzip zip telnet
 
 # Make port 443 available to the world outside this container
 EXPOSE 443

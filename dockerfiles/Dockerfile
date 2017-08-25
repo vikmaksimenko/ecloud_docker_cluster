@@ -1,1 +1,1 @@
-Dockerfile-haproxy
+Dockerfile-slave

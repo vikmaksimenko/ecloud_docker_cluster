@@ -2,6 +2,7 @@
 
 HAPROXY_IP=$1
 ZOOKEEPER_IP=$2
+DB_TYPE=$3
 
 DATA_DIR=/data
 COMMANDER_DIR=/opt/electriccloud/electriccommander
@@ -9,8 +10,29 @@ COMMANDER_DIR=/opt/electriccloud/electriccommander
 # set -x
 
 # Modify database.properties
-cp $DATA_DIR/mysql-connector-java-* $COMMANDER_DIR/server/lib
 cp $DATA_DIR/database.properties $COMMANDER_DIR/conf/database.properties
+
+
+case "$DB_TYPE" in
+	MYSQL)
+		# Add mysql_connector to server lib 
+		cp $DATA_DIR/mysql-connector-java-* $COMMANDER_DIR/server/lib
+		;;
+	ORACLE)
+		# Disable timezoneAsRegion to prevent ORA-01882: timezone region not found
+		TMP=$(mktemp -d)
+		cd $TMP
+		OJDBC_JAR="$COMMANDER_DIR/server/wars/commander-server.war/WEB-INF/lib/ojdbc.jar"
+		unzip $OJDBC_JAR oracle/jdbc/defaultConnectionProperties.properties -d $TMP
+		echo "oracle.jdbc.timezoneAsRegion=false" >> oracle/jdbc/defaultConnectionProperties.properties
+		zip $OJDBC_JAR oracle/jdbc/defaultConnectionProperties.properties
+		cd
+		rm -rf $TMP
+		;;
+	*)
+		echo "Unknown option: $DB_TYPE. Use {MYSQL|ORACLE}" > 2
+		exit 1
+esac
 
 # Modify commander.properties
 sed -i.bak s/COMMANDER_SERVER_NAME=.*/COMMANDER_SERVER_NAME=${HAPROXY_IP}/g $COMMANDER_DIR/conf/commander.properties
