@@ -1,15 +1,15 @@
 #Updated by Electric Commander
-#Wed Aug 23 15:03:12 UTC 2017
+#Fri Feb 20 09:04:28 EST 2015
 COMMANDER_DB_HOST=IP
-COMMANDER_COMPLETE_DB_USER=system
-COMMANDER_DB_NAME=xe
-COMMANDER_DB_PASSWORD=oracle
-COMMANDER_DB_DRIVER=oracle.jdbc.OracleDriver
-COMMANDER_DB_PORT=1521
-COMMANDER_DB_USER=system
-COMMANDER_DB_DIALECT=org.hibernate.dialect.Oracle10gDialect
+COMMANDER_COMPLETE_DB_USER=sa
+COMMANDER_DB_NAME=commander
+COMMANDER_DB_PASSWORD=Comm@nder
+COMMANDER_DB_DRIVER=com.microsoft.sqlserver.jdbc.SQLServerDriver
+COMMANDER_DB_PORT=1433
+COMMANDER_DB_USER=sa
+COMMANDER_DB_DIALECT=com.electriccloud.database.UnicodeSQLServerDialect
 COMMANDER_DB_BATCH_SIZE=100
 COMMANDER_DB_BATCH_REQUESTS=true
-COMMANDER_DB_TYPE=oracle
+COMMANDER_DB_TYPE=sqlserver
 COMMANDER_DB_STATEMENT_CACHE_SIZE=250
-COMMANDER_DB_URL=jdbc\:oracle\:thin\:@IP\:1521\:xe
+COMMANDER_DB_URL=jdbc\:sqlserver\://IP\:1433;databaseName\=commander;applicationName\=ElectricCommander;selectMethod\=cursor

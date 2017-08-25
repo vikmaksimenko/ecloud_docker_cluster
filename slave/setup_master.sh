@@ -29,6 +29,8 @@ case "$DB_TYPE" in
 		cd
 		rm -rf $TMP
 		;;
+	MSSQL)
+		;;
 	*)
 		echo "Unknown option: $DB_TYPE. Use {MYSQL|ORACLE}" > 2
 		exit 1

@@ -1,15 +1,15 @@
 #Updated by Electric Commander
 #Fri Feb 20 09:04:28 EST 2015
-COMMANDER_DB_HOST=dbServer
-COMMANDER_COMPLETE_DB_USER=commander
+COMMANDER_DB_HOST=IP
+COMMANDER_COMPLETE_DB_USER=sa
 COMMANDER_DB_NAME=commander
-COMMANDER_DB_PASSWORD=commander
+COMMANDER_DB_PASSWORD=Comm@nder
 COMMANDER_DB_DRIVER=com.microsoft.sqlserver.jdbc.SQLServerDriver
 COMMANDER_DB_PORT=1433
-COMMANDER_DB_USER=commander
+COMMANDER_DB_USER=sa
 COMMANDER_DB_DIALECT=com.electriccloud.database.UnicodeSQLServerDialect
 COMMANDER_DB_BATCH_SIZE=100
 COMMANDER_DB_BATCH_REQUESTS=true
 COMMANDER_DB_TYPE=sqlserver
 COMMANDER_DB_STATEMENT_CACHE_SIZE=250
-COMMANDER_DB_URL=jdbc\:sqlserver\://dbServer\:1433;databaseName\=commander;applicationName\=ElectricCommander;selectMethod\=cursor
+COMMANDER_DB_URL=jdbc\:sqlserver\://IP\:1433;databaseName\=commander;applicationName\=ElectricCommander;selectMethod\=cursor

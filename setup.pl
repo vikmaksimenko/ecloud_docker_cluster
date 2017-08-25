@@ -22,7 +22,7 @@ Print the manual page and exit.
 
 =item B<--dbType>
 
-What database to use for cluster setup. Can be one of: MYSQL
+What database to use for cluster setup. Can be one of: {MYSQL,ORACLE,MSSQL}
 
 =item B<--slaveNumber>
 
@@ -66,7 +66,7 @@ use Data::Dumper;
 my $slave_number	= 1;
 my $agent_number	= 1;
 my $db_type			= "MYSQL";
-my @db_types 		= ("MYSQL", "ORACLE");
+my @db_types 		= ("MYSQL", "ORACLE", "MSSQL");
 my $commander_dir 	= "/opt/electriccloud/electriccommander";
 
 my $current_dir = `pwd`;
@@ -183,76 +183,82 @@ sub check_files {
 
 check_files();
 
-echo("Creating network");
-$cid = `docker network create -d bridge network1`;
-chomp($cid);
-serialise_docker_instance("network1", "network", $cid);
+# echo("Creating network");
+# $cid = `docker network create -d bridge network1`;
+# chomp($cid);
+# serialise_docker_instance("network1", "network", $cid);
 
-echo("Creating volume for workspace");
-$out = `docker volume create --name workspace`;
-chomp($out);
-serialise_docker_instance($out, "volume", $out);
+# echo("Creating volume for workspace");
+# $out = `docker volume create --name workspace`;
+# chomp($out);
+# serialise_docker_instance($out, "volume", $out);
 
-echo("Creating volume for plugins");
-$out = `docker volume create --name plugins`;
-chomp($out);
-serialise_docker_instance($out, "volume", $out);
-
-echo("Starting $db_type database server");
-if ($db_type eq "MYSQL") {
-	$cid = `docker run -d --name db --net network1 --hostname db --env MYSQL_ROOT_PASSWORD=root --env MYSQL_DATABASE=commander --publish 3306:3306 -v $current_dir/db/mysql:/etc/mysql/conf.d mysql:latest`;
-	chomp($cid);
-	validate_container("db", $cid);
-
-} elsif($db_type eq "ORACLE") {
-	$cid = `docker run -d --name db --net network1 --hostname db --env ORACLE_ALLOW_REMOTE=true --publish 49160:22 --publish 49161:1521 -v $current_dir/db/oracle:/data wnameless/oracle-xe-11g`;
-	chomp($cid);
+# echo("Creating volume for plugins");
+# $out = `docker volume create --name plugins`;
+# chomp($out);
+# serialise_docker_instance($out, "volume", $out);
 
 
-	validate_container("db", $cid);
-	run("docker exec -it db sh /data/update_db_server.sh");
-}
+# # TODO: REFACTOR THIS CODE BLOCK
+# echo("Starting $db_type database server");
+# if ($db_type eq "MYSQL") {
+# 	$cid = `docker run -d --name db --net network1 --hostname db --env MYSQL_ROOT_PASSWORD=root --env MYSQL_DATABASE=commander --publish 3306:3306 -v $current_dir/db/mysql:/etc/mysql/conf.d mysql:latest`;
+# } elsif($db_type eq "ORACLE") {
+# 	$cid = `docker run -d --name db --net network1 --hostname db --env ORACLE_ALLOW_REMOTE=true --publish 49160:22 --publish 49161:1521 -v $current_dir/db/oracle:/data wnameless/oracle-xe-11g`;
+# } elsif($db_type eq "MSSQL") {
+# 	$cid = `docker run -d --name db --net network1 --hostname db --env 'ACCEPT_EULA=Y' --env 'SA_PASSWORD=Comm\@nder' --publish 1433:1433 -v $current_dir/db/mssql:/data microsoft/mssql-server-linux`;
+# }
 
-echo("Updating database.properties");
-update_database_properties($containers{"db"}{"ip"}, $db_type);
+# chomp($cid);
+# validate_container("db", $cid);
 
+# if($db_type eq "ORACLE") {
+# 	run("docker exec -it db sh /data/update_db_server.sh");
+# } elsif($db_type eq "MSSQL") {
+# 	echo("Waiting for MSSQL server up");
+# 	system("sleep 90");
+# 	run("docker exec -it db /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Comm\@nder -d master -i /data/setup.sql");
+# }
 
-echo("Creating $slave_number slaves");
-for (my $i = 1; $i <= $slave_number; $i++ ) {
-	echo("Starting slave$i");
-	$cid = `docker run --name slave$i --net network1 --hostname slave$i --volume $current_dir/slave:/data --volume workspace:/workspace --volume plugins:/plugins -dit vmaksimenko/ecloud:slave`;
-	chomp($cid);
-	validate_container("slave$i", $cid);
-	system(qq{perl update_haproxy_cfg.pl slave$i $containers{"slave$i"}{"ip"}});
-}
+# echo("Updating database.properties");
+# update_database_properties($containers{"db"}{"ip"}, $db_type);
 
-echo("Run Zookeeper Server");
-$cid = `docker run -d --name zookeeper --net network1 --hostname zookeeper --publish 8080:8080 --volume $current_dir/exhibitor:/exhibitor jplock/zookeeper`;
-chomp($cid);
-validate_container("zookeeper", $cid);
+# echo("Creating $slave_number slaves");
+# for (my $i = 1; $i <= $slave_number; $i++ ) {
+# 	echo("Starting slave$i");
+# 	$cid = `docker run --name slave$i --net network1 --hostname slave$i --volume $current_dir/slave:/data --volume workspace:/workspace --volume plugins:/plugins -dit vmaksimenko/ecloud:slave`;
+# 	chomp($cid);
+# 	validate_container("slave$i", $cid);
+# 	system(qq{perl update_haproxy_cfg.pl slave$i $containers{"slave$i"}{"ip"}});
+# }
 
-echo("Starting Exhibitor");
-run("docker exec -d zookeeper java -jar /exhibitor/exhibitor-1.5.5.jar -c file");
+# echo("Run Zookeeper Server");
+# $cid = `docker run -d --name zookeeper --net network1 --hostname zookeeper --publish 8080:8080 --volume $current_dir/exhibitor:/exhibitor jplock/zookeeper`;
+# chomp($cid);
+# validate_container("zookeeper", $cid);
 
-echo("Run Haproxy server container");
-$cid = `docker run -dit --name haproxy --hostname haproxy --net network1 --publish 1936:1936 --volume $current_dir/haproxy:/data vmaksimenko/ecloud:haproxy`;
-validate_container("haproxy", $cid);
+# echo("Starting Exhibitor");
+# run("docker exec -d zookeeper java -jar /exhibitor/exhibitor-1.5.5.jar -c file");
 
-echo("Create server certificate");
-run("docker exec -it haproxy perl /data/generate_certificate.pl > /dev/null");
+# echo("Run Haproxy server container");
+# $cid = `docker run -dit --name haproxy --hostname haproxy --net network1 --publish 1936:1936 --volume $current_dir/haproxy:/data vmaksimenko/ecloud:haproxy`;
+# validate_container("haproxy", $cid);
 
-echo("Starting haproxy service");
-run("docker exec -it haproxy sudo cp /data/haproxy.cfg /etc/haproxy/haproxy.cfg");
-run("docker exec -it haproxy /etc/init.d/haproxy start > /dev/null");
+# echo("Create server certificate");
+# run("docker exec -it haproxy perl /data/generate_certificate.pl > /dev/null");
 
-echo("Install commander on slaves");
-for (my $i = 1; $i <= $slave_number; $i++ ) {
-	echo("Installing commander to slave$i");
-	run("docker exec -it slave$i sudo /data/install_commander.sh");
-}
+# echo("Starting haproxy service");
+# run("docker exec -it haproxy sudo cp /data/haproxy.cfg /etc/haproxy/haproxy.cfg");
+# run("docker exec -it haproxy /etc/init.d/haproxy start > /dev/null");
 
-echo("Move first node to cluster");
-run(qq{docker exec -it slave1 sudo /data/setup_master.sh $containers{"haproxy"}{"ip"} $containers{"zookeeper"}{"ip"} $db_type});
+# echo("Install commander on slaves");
+# for (my $i = 1; $i <= $slave_number; $i++ ) {
+# 	echo("Installing commander to slave$i");
+# 	run("docker exec -it slave$i sudo /data/install_commander.sh");
+# }
+
+# echo("Move first node to cluster");
+# run(qq{docker exec -it slave1 sudo /data/setup_master.sh $containers{"haproxy"}{"ip"} $containers{"zookeeper"}{"ip"} $db_type});
 
 echo("Move other nodes to cluster");
 for (my $i = 2; $i <= $slave_number; $i++ ) {
