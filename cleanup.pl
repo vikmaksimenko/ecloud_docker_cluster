@@ -20,9 +20,21 @@ Print a brief help message and exit.
 
 Print the manual page and exit.
 
-=item B<--containes>
+=item B<--containers>
 
 Names of containers to remove
+
+=item B<--networks>
+
+Names of networks to remove
+
+=item B<--volumes>
+
+Names of volumes to remove
+
+=item B<--file>
+
+Path to CSV file with instance name, type and cid in format "$name,$type,$cid". Type can be one of {container, volume, network}
 
 =back
 
