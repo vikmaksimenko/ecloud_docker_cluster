@@ -36,14 +36,16 @@ case "$DB_TYPE" in
 		exit 1
 esac
 
+/etc/init.d/commanderServer restart
+# Waiting for passkey
+while [ ! -f $COMMANDER_DIR/conf/passkey ] ; do sleep 10 ; done
+
 # Modify commander.properties
 sed -i.bak s/COMMANDER_SERVER_NAME=.*/COMMANDER_SERVER_NAME=${HAPROXY_IP}/g $COMMANDER_DIR/conf/commander.properties
 
 # Upload file to zookeeper
 COMMANDER_ZK_CONNECTION=$ZOOKEEPER_IP:2181 $COMMANDER_DIR/jre/bin/java -jar $COMMANDER_DIR/server/bin/zk-config-tool-jar-with-dependencies.jar com.electriccloud.commander.cluster.ZKConfigTool --commanderPropertiesFile $COMMANDER_DIR/conf/commander.properties --keystoreFile $COMMANDER_DIR/conf/keystore --confSecurityFolder $COMMANDER_DIR/conf/security --databasePropertiesFile $COMMANDER_DIR/conf/database.properties --passkeyFile $COMMANDER_DIR/conf/passkey 
 $COMMANDER_DIR/bin/ecconfigure --serverName $ZOOKEEPER_IP --serverZooKeeperConnection ${ZOOKEEPER_IP}:2181
-
-/etc/init.d/commanderServer restart
 
 # wait_for_server
 echo "Waiting for server up"
@@ -87,7 +89,7 @@ ectool setProperty "/server/Electric Cloud/unixPluginsShare" "/plugins"
 ectool setProperty "/server/Electric Cloud/windowsPluginsShare" "/plugins"
 $COMMANDER_DIR/bin/ecconfigure --agentPluginsDirectory "/plugins"
 
-/etc/init.d/commanderServer restart
-echo "Waiting for server up"
-chmod +x /data/wait_for_server.sh && /data/wait_for_server.sh
-echo "Commander server is running"
+# /etc/init.d/commanderServer restart
+# echo "Waiting for server up"
+# chmod +x /data/wait_for_server.sh && /data/wait_for_server.sh
+# echo "Commander server is running"
