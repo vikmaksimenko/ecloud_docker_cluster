@@ -5,8 +5,16 @@ hostname=$(hostname)
 commander_dir="/opt/electriccloud/electriccommander"
 ectool="$commander_dir/bin/ectool"
 
-/data/Electric* --mode silent --installAgent --unixAgentGroup build --unixAgentUser build 
+sudo /data/Electric* \
+--mode silent \
+--installAgent \
+--unixAgentGroup build \
+--unixAgentUser build \
+--remoteServer $haproxy_ip \
+--remoteServerUser admin \
+--remoteServerPassword changeme \
+--agentPluginsDirectory "/plugins" 
+
 $ectool --server $haproxy_ip login admin changeme
-$ectool --server $haproxy_ip deleteResource $hostname
-$ectool --server $haproxy_ip createResource $hostname --hostName $hostname --port 7800 --resourcePools local,default
-$commander_dir/bin/ecconfigure --agentPluginsDirectory "/plugins" 
+$ectool deleteResource $hostname
+$ectool createResource $hostname --hostName $hostname --port 7800 --resourcePools local,default
